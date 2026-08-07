@@ -1,0 +1,9 @@
+---
+name: folio-auto-renew
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python>=3.10,<3.11
+  - pdm==2.28.0
+  - precious==0.11.0
