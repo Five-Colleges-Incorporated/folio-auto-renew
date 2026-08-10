@@ -3,7 +3,7 @@ name = "folio-auto-renew"
 version = "0.0.1"
 description = "An early preview of the Umbrellaleaf automatic renewals"
 authors = [
-    {name = "Katherine Bargar", email = "kbargar@fivecolleges.edu"},
+    {name = "Katherine Bargar",email = "kbargar@fivecolleges.edu"},
 ]
 dependencies = ["folioclient[orjson]>=1.0.0"]
 requires-python = ">=3.10"
@@ -18,7 +18,6 @@ Homepage = "https://github.com/Five-Colleges-Incorporated/folio-auto-renew"
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
-
 [tool.pdm]
 distribution = true
 package-dir = "src"
@@ -32,16 +31,19 @@ asyncio_mode = "auto"
 branch = true
 include = ["src/**"]
 
-[tool.mypy]
-python_version = "3.10"
-strict = true
+[tool.ty.rules]
+blanket-ignore-comment = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "warn"
+unsupported-dynamic-base = "warn"
+[tool.ty.analysis]
+strict-literal-narrowing = true
+strict-generic-narrowing = true
 
-[tool.ruff]
-target-version = "py310"
 [tool.ruff.lint]
 select = ["ALL"]
 fixable = ["ALL"]
-ignore = ["FBT", "D105", "FIX002", "TD002", "TD003", "COM812"]
+ignore = ["FBT", "D105", "FIX002", "TD002", "TD003", "COM812", "CPY001"]
 pydocstyle.convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D", "S", "INP001", "N813", "PLC0415", "PLR2004"]
@@ -57,7 +59,7 @@ test-install.composite = ["pdm sync --lockfile=pylock.minimal.toml", "pdm sync -
 [dependency-groups]
 lint = [
     "ruff==0.16.2",
-    "mypy==2.3.0",
+    "ty==0.0.69",
     "pre-commit-hooks==6.0.0",
 ]
 test = [
