@@ -3,19 +3,21 @@
 import json
 import re
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from datetime import datetime
 from functools import reduce
-from typing import Any, NamedTuple
+from typing import Any
 
 from folioclient import FolioClient, FolioError
 
 
-class RenewableLoan(NamedTuple):
+@dataclass
+class RenewableLoan:
     """Represents the pair of ids needed to renew a Loan."""
 
     item_id: str
     patron_id: str
-    source: str
+    source: str = field(compare=False)
 
 
 async def stream_loans(
@@ -150,24 +152,24 @@ def _printable_loan(loan: dict[str, Any]) -> str:
                 loan,
             )
             for path in [
-                ("id"),
-                ("userId"),
+                ("id",),
+                ("userId",),
                 ("borrower", "barcode"),
                 ("patronGroupAtCheckout", "name"),
                 ("borrower", "patronGroup"),
-                ("itemId"),
+                ("itemId",),
                 ("item", "barcode"),
                 ("item", "status", "name"),
                 ("item", "instanceId"),
                 ("item", "instanceHrid"),
-                ("itemEffectiveLocationIdAtCheckOut"),
+                ("itemEffectiveLocationIdAtCheckOut",),
                 ("item", "location", "name"),
-                ("loanDate"),
-                ("dueDate"),
+                ("loanDate",),
+                ("dueDate",),
                 ("loanPolicy", "name"),
-                ("dueDateChangedByRecall"),
-                ("dueDateChangedByNearExpireUser"),
-                ("dueDateChangedByHold"),
+                ("dueDateChangedByRecall",),
+                ("dueDateChangedByNearExpireUser",),
+                ("dueDateChangedByHold",),
                 ("status", "name"),
                 ("metadata", "createdDate"),
                 ("metadata", "updatedDate"),
