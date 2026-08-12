@@ -7,10 +7,10 @@ from datetime import datetime
 from functools import reduce
 from typing import Any, NamedTuple
 
-from folioclient import FolioClient
+from folioclient import FolioClient, FolioError
 
 
-class Renewable(NamedTuple):
+class RenewableLoan(NamedTuple):
     """Represents the pair of ids needed to renew a Loan."""
 
     item_id: str
@@ -18,44 +18,80 @@ class Renewable(NamedTuple):
     source: str
 
 
-def _prune_source(loan: dict[str, Any]) -> str:
-    return json.dumps(
-        {
-            "_".join(path): reduce(
-                lambda acc, key: acc.get(key) if isinstance(acc, dict) else None,
-                path,
-                loan,
+async def stream_loans(
+    client: FolioClient,
+    patron_barcode_patterns: list[str],
+    due_date: datetime,
+) -> AsyncIterator[RenewableLoan]:
+    """Streams only renewable Loan information from FOLIO."""
+    patron_barcode_matcher = re.compile(rf"^({r'|'.join(patron_barcode_patterns)}).*$")
+    renewables_query = RENEWABLES_QUERY_TEMPLATE.format(due_date)
+    # TODO: Log the matcher.pattern and renewables_query
+
+    async for loan in client.folio_get_all_async(
+        path="/circulation/loans",
+        key="loans",
+        query=renewables_query,
+    ):
+        source = _printable_loan(loan)
+
+        patron_barcode = loan.get("borrower", {}).get("barcode")
+        if patron_barcode is None:
+            # TODO: Log the source
+            continue
+
+        if not patron_barcode_matcher.match(patron_barcode):
+            # Expected because it is for another campus
+            continue
+
+        if (
+            len(loan.get("itemId", "").strip()) == 0
+            or len(loan.get("userId", "").strip()) == 0
+        ):
+            # TODO: Log the source
+            continue
+
+        if loan.get("dueDateChangedByRecall", False):
+            # TODO: Log the source
+            continue
+
+        if loan.get(
+            "dueDateChangedByNearExpireUser",
+            False,
+        ) or loan.get(
+            "dueDateChangedByHold",
+            False,
+        ):
+            # TODO: Log the source with a warning but don't skip
+            ...
+
+        yield RenewableLoan(loan["itemId"].strip(), loan["userId"].strip(), source)
+
+
+async def renew_loans(
+    client: FolioClient,
+    renewables: AsyncIterator[RenewableLoan],
+) -> None:
+    """Renews until the source Loans are exhausted."""
+    async for loan in renewables:
+        # TODO: Verbosely log Renewing: ids
+
+        try:
+            new_loan = await client.folio_post_async(
+                "/circulation/renew-by-id",
+                payload={
+                    "itemId": loan.item_id,
+                    "userId": loan.patron_id,
+                },
             )
-            for path in [
-                ("id"),
-                ("userId"),
-                ("borrower", "barcode"),
-                ("patronGroupAtCheckout", "name"),
-                ("borrower", "patronGroup"),
-                ("itemId"),
-                ("item", "barcode"),
-                ("item", "status", "name"),
-                ("item", "instanceId"),
-                ("item", "instanceHrid"),
-                ("itemEffectiveLocationIdAtCheckOut"),
-                ("item", "location", "name"),
-                ("loanDate"),
-                ("dueDate"),
-                ("loanPolicy", "name"),
-                ("dueDateChangedByRecall"),
-                ("dueDateChangedByNearExpireUser"),
-                ("dueDateChangedByHold"),
-                ("status", "name"),
-                ("metadata", "createdDate"),
-                ("metadata", "updatedDate"),
-            ]
-        },
-        indent=4,
-        default=str,
-    )
+            if new_loan is not None:
+                # TODO: Verbosely log Renewed: _printable_loan(new_loan)
+                ...
+        except FolioError as fe:
+            f"""TODO: Log {fe} and the source as error"""
 
 
-_RENEWABLES_QUERY = (
+RENEWABLES_QUERY_TEMPLATE = (
     'status="Open" AND itemStatus=="Checked Out" '
     # 12-month-unlimited
     'AND loanPolicyId=="9089d8ff-decd-401c-a4dd-61053efefdb6" '
@@ -103,59 +139,38 @@ _RENEWABLES_QUERY = (
 )
 
 
-async def stream_renewables(
-    client: FolioClient,
-    patron_barcode_patterns: list[str],
-    due_date: datetime,
-) -> AsyncIterator[Renewable]:
-    """Streams only renewable Loan information from FOLIO."""
-    patron_barcode_matcher = re.compile(rf"^({r'|'.join(patron_barcode_patterns)}).*$")
-    renewables_query = _RENEWABLES_QUERY.format(due_date)
-    # TODO: Log the matcher.pattern and renewables_query
-
-    async for loan in client.folio_get_all_async(
-        path="/circulation/loans",
-        key="loans",
-        query=renewables_query,
-    ):
-        source = _prune_source(loan)
-
-        patron_barcode = loan.get("borrower", {}).get("barcode")
-        if patron_barcode is None:
-            # TODO: Log the source
-            continue
-
-        if not patron_barcode_matcher.match(patron_barcode):
-            # Expected because it is for another campus
-            continue
-
-        if (
-            len(loan.get("itemId", "").strip()) == 0
-            or len(loan.get("userId", "").strip()) == 0
-        ):
-            # TODO: Log the source
-            continue
-
-        if loan.get("dueDateChangedByRecall", False):
-            # TODO: Log the source
-            continue
-
-        if loan.get(
-            "dueDateChangedByNearExpireUser",
-            False,
-        ) or loan.get(
-            "dueDateChangedByHold",
-            False,
-        ):
-            # TODO: Log the source with a warning but don't skip
-            ...
-
-        yield Renewable(loan["itemId"].strip(), loan["userId"].strip(), source)
-
-
-async def renew_many(client: FolioClient, renewables: AsyncIterator[Renewable]) -> None:
-    """Renews until the source Loans are exhausted."""
-
-
-async def renew_one(client: FolioClient, renewable: Renewable) -> None:
-    """Renews an individual Loan in FOLIO."""
+def _printable_loan(loan: dict[str, Any]) -> str:
+    return json.dumps(
+        {
+            "_".join(path): reduce(
+                lambda acc, key: acc.get(key) if isinstance(acc, dict) else None,
+                path,
+                loan,
+            )
+            for path in [
+                ("id"),
+                ("userId"),
+                ("borrower", "barcode"),
+                ("patronGroupAtCheckout", "name"),
+                ("borrower", "patronGroup"),
+                ("itemId"),
+                ("item", "barcode"),
+                ("item", "status", "name"),
+                ("item", "instanceId"),
+                ("item", "instanceHrid"),
+                ("itemEffectiveLocationIdAtCheckOut"),
+                ("item", "location", "name"),
+                ("loanDate"),
+                ("dueDate"),
+                ("loanPolicy", "name"),
+                ("dueDateChangedByRecall"),
+                ("dueDateChangedByNearExpireUser"),
+                ("dueDateChangedByHold"),
+                ("status", "name"),
+                ("metadata", "createdDate"),
+                ("metadata", "updatedDate"),
+            ]
+        },
+        indent=4,
+        default=str,
+    )
