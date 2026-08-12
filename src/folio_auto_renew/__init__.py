@@ -35,8 +35,10 @@ async def stream_loans(
     ):
         source = _printable_loan(loan)
 
-        patron_barcode = loan.get("borrower", {}).get("barcode")
-        if patron_barcode is None:
+        if (
+            not isinstance(patron := loan.get("borrower", {}), dict)
+            or (patron_barcode := patron.get("barcode")) is None
+        ):
             # TODO: Log the source
             continue
 
