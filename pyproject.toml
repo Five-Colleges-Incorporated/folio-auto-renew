@@ -5,7 +5,7 @@ description = "An early preview of the Umbrellaleaf automatic renewals"
 authors = [
     {name = "Katherine Bargar",email = "kbargar@fivecolleges.edu"},
 ]
-dependencies = ["folioclient[orjson]>=1.0.0"]
+dependencies = ["folioclient[orjson]>=1.0.0", "httpx<1"]
 requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -63,7 +63,9 @@ lint = [
     "pre-commit-hooks==6.0.0",
 ]
 test = [
-    "pytest==9.1.1",
+    # pytest-cases is only compatible with pytest<9.1 for the moment
+    # https://github.com/smarie/python-pytest-cases/issues/385
+    "pytest==9.0.3",
     "pytest-cases==3.10.1",
     "pytest-asyncio==1.4.0",
     "coverage==7.15.4",
