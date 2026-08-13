@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 from typing import Any, TypeAlias
 from unittest import mock
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
-from folioclient import FolioClient
 from pytest_cases import parametrize, parametrize_with_cases
 
 from folio_auto_renew import RenewableLoan
@@ -28,7 +28,7 @@ class StreamLoansTC:
             "borrower": {"barcode": barcode},
         }
 
-    def arrange_client(self) -> FolioClient:
+    def arrange_client(self) -> mock.MagicMock:
         loan_results = mock.AsyncMock()
         loan_results.__aiter__.return_value = self.returned_loans
         client = mock.Mock()
@@ -179,10 +179,29 @@ def case_due_date_changed() -> StreamLoansTC:
 
 @pytest.mark.asyncio
 @parametrize_with_cases("tc", cases=".")
-async def test_streamed_loans(tc: StreamLoansTC) -> None:
+async def test_cleansfilters_loans(tc: StreamLoansTC) -> None:
     actual_loans = uut(
         tc.arrange_client(),
         tc.barcode_patterns,
         datetime.now(tz=timezone.utc),
     )
     assert [loan async for loan in actual_loans] == tc.expected_loans
+
+
+async def test_duedate() -> None:
+    client = StreamLoansTC([], []).arrange_client()
+
+    duedate = datetime(2026, 4, 1, 13, 14, 15, tzinfo=ZoneInfo("America/New_York"))
+    async for _ in uut(client, [], duedate):
+        # We have to actual enumerate the list to get the call to happen
+        ...
+
+    client.folio_get_all_async.assert_called_once()
+    # daylight savings...
+    assert (
+        "2026-04-01T13:00:00-0400"
+        in client.folio_get_all_async.call_args_list[0][1]["query"]
+    ) or (
+        "2026-04-01T13:00:00-0500"
+        in client.folio_get_all_async.call_args_list[0][1]["query"]
+    )
