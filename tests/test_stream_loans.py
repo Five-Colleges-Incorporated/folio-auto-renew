@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, TypeAlias
 from unittest import mock
@@ -18,7 +18,7 @@ Loan: TypeAlias = dict[str, Any]
 class StreamLoansTC:
     returned_loans: list[Loan]
     expected_loans: list[RenewableLoan]
-    barcode_patterns: list[str] = field(default_factory=list)
+    barcode_patterns: list[str] | None = None
 
     @staticmethod
     def generate_loan(barcode: str = "barcode") -> Loan:
@@ -148,7 +148,7 @@ def case_borrower_missing(has_barcode_patterns: bool) -> StreamLoansTC:
     return StreamLoansTC(
         returned_loans,
         expected_loans,
-        ["mb"] if has_barcode_patterns else [],
+        ["mb"] if has_barcode_patterns else None,
     )
 
 
@@ -191,11 +191,24 @@ async def test_cleansfilters_loans(tc: StreamLoansTC) -> None:
     assert [loan async for loan in actual_loans] == tc.expected_loans
 
 
+@pytest.mark.asyncio
+async def test_patron_barcode_patterns_validation() -> None:
+    with pytest.raises(ValueError, match=r"patron_barcode_patterns.*"):
+        async for _ in uut(
+            StreamLoansTC([], []).arrange_client(),
+            [],
+            datetime.now(tz=timezone.utc),
+        ):
+            # We have to actual enumerate the list to get the call to happen
+            ...
+
+
+@pytest.mark.asyncio
 async def test_duedate() -> None:
     client = StreamLoansTC([], []).arrange_client()
 
     duedate = datetime(2026, 4, 1, 13, 14, 15, tzinfo=ZoneInfo("America/New_York"))
-    async for _ in uut(client, [], duedate):
+    async for _ in uut(client, None, duedate):
         # We have to actual enumerate the list to get the call to happen
         ...
 

@@ -25,15 +25,26 @@ class RenewableLoan:
 
 async def stream_loans(
     client: FolioClient,
-    patron_barcode_patterns: list[str],
+    patron_barcode_patterns: list[str] | None,
     due_date: datetime,
 ) -> AsyncIterator[RenewableLoan]:
     """Streams only renewable Loan information from FOLIO."""
-    patron_barcode_matcher = re.compile(rf"^({r'|'.join(patron_barcode_patterns)}).*$")
+    patron_barcode_matcher = None
+    if patron_barcode_patterns is not None:
+        if len(patron_barcode_patterns) == 0:
+            msg = (
+                "patron_barcode_patterns was empty. "
+                "Pass None to intentionally match all barcodes"
+            )
+            raise ValueError(msg)
+
+        patron_barcode_matcher = re.compile(
+            rf"^({r'|'.join(patron_barcode_patterns)}).*$",
+        )
     renewables_query = RENEWABLES_QUERY_TEMPLATE.format(due_date)
     logger.debug(
         "Starting loan stream with barcode_pattern=%s query=%s",
-        patron_barcode_matcher.pattern,
+        patron_barcode_matcher,
         renewables_query,
     )
 
@@ -44,7 +55,7 @@ async def stream_loans(
     ):
         source = _printable_loan(loan)
 
-        if len(patron_barcode_patterns) > 0:
+        if patron_barcode_matcher is not None:
             if (
                 not isinstance(patron := loan.get("borrower", {}), dict)
                 or (patron_barcode := patron.get("barcode")) is None
