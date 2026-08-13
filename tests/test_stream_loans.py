@@ -149,6 +149,34 @@ def case_borrower_missing(has_barcode_patterns: bool) -> StreamLoansTC:
     )
 
 
+def case_due_date_changed() -> StreamLoansTC:
+    returned_loans = []
+    expected_loans = []
+
+    def expect_last_returned_loan() -> None:
+        expected_loans.append(
+            RenewableLoan(
+                returned_loans[-1]["itemId"],
+                returned_loans[-1]["userId"],
+                "",
+            ),
+        )
+
+    returned_loans.append(StreamLoansTC.generate_loan())
+    returned_loans[-1]["dueDateChangedByRecall"] = True
+    returned_loans.append(StreamLoansTC.generate_loan())
+    returned_loans[-1]["dueDateChangedByRecall"] = False
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan())
+    returned_loans[-1]["dueDateChangedByNearExpireUser"] = True
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan())
+    returned_loans[-1]["dueDateChangedByHold"] = True
+    expect_last_returned_loan()
+
+    return StreamLoansTC(returned_loans, expected_loans)
+
+
 @pytest.mark.asyncio
 @parametrize_with_cases("tc", cases=".")
 async def test_streamed_loans(tc: StreamLoansTC) -> None:
