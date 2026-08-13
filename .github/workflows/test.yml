@@ -1,0 +1,60 @@
+# yaml-language-server: $schema: https://raw.githubusercontent.com/SchemaStore/schemastore/refs/heads/master/src/schemas/json/github-workflow.json
+---
+name: Test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - review_requested
+      - ready_for_review
+      - auto_merge_enabled
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # install dependencies
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          cache: true
+          cache-dependency-path: pylock.toml
+      - run: pdm install --lockfile pylock.toml
+
+      # test
+      - run: pdm run test
+
+  test-minimal-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # install dependencies
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: 3.10
+          cache: true
+          cache-dependency-path: pylock.minimal.toml
+      - run: pdm install --lockfile pylock.minimal.toml
+
+      # test
+      - run: pdm run test
+
+  test-maximal-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # install dependencies
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: 3.14
+          cache: true
+          cache-dependency-path: pylock.maximal.toml
+      - run: pdm install --lockfile pylock.maximal.toml
+
+      # test
+      - run: pdm run test
