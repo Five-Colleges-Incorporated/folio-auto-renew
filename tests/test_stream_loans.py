@@ -38,12 +38,70 @@ class StreamLoansTC:
 
 
 @parametrize("loan_count", [0, 1, 5])
-def case_ok_nobarcode(loan_count: int) -> StreamLoansTC:
+def case_nobarcodefilter(loan_count: int) -> StreamLoansTC:
     returned_loans = [StreamLoansTC.generate_loan() for _ in range(loan_count)]
     return StreamLoansTC(
         returned_loans,
         [RenewableLoan(loan["itemId"], loan["userId"], "") for loan in returned_loans],
     )
+
+
+def case_one_barcodefilter() -> StreamLoansTC:
+    returned_loans = []
+    expected_loans = []
+
+    def expect_last_returned_loan() -> None:
+        expected_loans.append(
+            RenewableLoan(
+                returned_loans[-1]["itemId"],
+                returned_loans[-1]["userId"],
+                "",
+            ),
+        )
+
+    returned_loans.append(StreamLoansTC.generate_loan(""))
+    returned_loans.append(StreamLoansTC.generate_loan("nb111"))
+    returned_loans.append(StreamLoansTC.generate_loan(" mbtrim"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("mb1111"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("mb"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("123mb"))
+
+    return StreamLoansTC(returned_loans, expected_loans, ["mb"])
+
+
+def case_multiple_barcodefilters() -> StreamLoansTC:
+    returned_loans = []
+    expected_loans = []
+
+    def expect_last_returned_loan() -> None:
+        expected_loans.append(
+            RenewableLoan(
+                returned_loans[-1]["itemId"],
+                returned_loans[-1]["userId"],
+                "",
+            ),
+        )
+
+    returned_loans.append(StreamLoansTC.generate_loan(""))
+    returned_loans.append(StreamLoansTC.generate_loan(" nbtrim"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("nb111"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("123nb"))
+    returned_loans.append(StreamLoansTC.generate_loan("nmb"))
+    returned_loans.append(StreamLoansTC.generate_loan("mnb"))
+    returned_loans.append(StreamLoansTC.generate_loan(" mbtrim"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("mb1111"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("mb"))
+    expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("123mb"))
+
+    return StreamLoansTC(returned_loans, expected_loans, ["mb", "nb"])
 
 
 @pytest.mark.asyncio

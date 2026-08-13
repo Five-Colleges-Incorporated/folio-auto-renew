@@ -40,11 +40,12 @@ async def stream_loans(
         if (
             not isinstance(patron := loan.get("borrower", {}), dict)
             or (patron_barcode := patron.get("barcode")) is None
+            or (len(patron_barcode_patterns) > 0 and len(patron_barcode) == 0)
         ):
             # TODO: Log the source
             continue
 
-        if not patron_barcode_matcher.match(patron_barcode):
+        if not patron_barcode_matcher.match(patron_barcode.strip()):
             # Expected because it is for another campus
             continue
 
