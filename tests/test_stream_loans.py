@@ -104,6 +104,51 @@ def case_multiple_barcodefilters() -> StreamLoansTC:
     return StreamLoansTC(returned_loans, expected_loans, ["mb", "nb"])
 
 
+def case_mangled_loans() -> StreamLoansTC:
+    returned_loans = []
+
+    returned_loans.append(StreamLoansTC.generate_loan())
+    del returned_loans[-1]["userId"]
+    returned_loans.append(StreamLoansTC.generate_loan())
+    del returned_loans[-1]["itemId"]
+
+    return StreamLoansTC(returned_loans, [])
+
+
+@parametrize(
+    "has_barcode_patterns",
+    [True, False],
+    ids=["has_patterns", "no_patterns"],
+)
+def case_borrower_missing(has_barcode_patterns: bool) -> StreamLoansTC:
+    returned_loans = []
+    expected_loans = []
+
+    def expect_last_returned_loan() -> None:
+        expected_loans.append(
+            RenewableLoan(
+                returned_loans[-1]["itemId"],
+                returned_loans[-1]["userId"],
+                "",
+            ),
+        )
+
+    returned_loans.append(StreamLoansTC.generate_loan("mb"))
+    del returned_loans[-1]["borrower"]
+    if not has_barcode_patterns:
+        expect_last_returned_loan()
+    returned_loans.append(StreamLoansTC.generate_loan("mb"))
+    del returned_loans[-1]["borrower"]["barcode"]
+    if not has_barcode_patterns:
+        expect_last_returned_loan()
+
+    return StreamLoansTC(
+        returned_loans,
+        expected_loans,
+        ["mb"] if has_barcode_patterns else [],
+    )
+
+
 @pytest.mark.asyncio
 @parametrize_with_cases("tc", cases=".")
 async def test_streamed_loans(tc: StreamLoansTC) -> None:
