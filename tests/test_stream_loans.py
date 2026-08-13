@@ -23,8 +23,9 @@ class StreamLoansTC:
     @staticmethod
     def generate_loan(barcode: str = "barcode") -> Loan:
         return {
-            "itemId": str(uuid4()).split("-")[0],
-            "userId": str(uuid4()).split("-")[0],
+            "id": str(uuid4()),
+            "itemId": str(uuid4()),
+            "userId": str(uuid4()),
             "borrower": {"barcode": barcode},
         }
 
@@ -107,6 +108,8 @@ def case_multiple_barcodefilters() -> StreamLoansTC:
 def case_mangled_loans() -> StreamLoansTC:
     returned_loans = []
 
+    returned_loans.append(StreamLoansTC.generate_loan())
+    del returned_loans[-1]["id"]
     returned_loans.append(StreamLoansTC.generate_loan())
     del returned_loans[-1]["userId"]
     returned_loans.append(StreamLoansTC.generate_loan())

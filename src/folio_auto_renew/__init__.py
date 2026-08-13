@@ -1,6 +1,7 @@
 """Module providing automatic renewals."""
 
 import json
+import logging
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -9,6 +10,8 @@ from functools import reduce
 from typing import Any
 
 from folioclient import FolioClient, FolioError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -28,7 +31,11 @@ async def stream_loans(
     """Streams only renewable Loan information from FOLIO."""
     patron_barcode_matcher = re.compile(rf"^({r'|'.join(patron_barcode_patterns)}).*$")
     renewables_query = RENEWABLES_QUERY_TEMPLATE.format(due_date)
-    # TODO: Log the matcher.pattern and renewables_query
+    logger.debug(
+        "Starting loan stream with barcode_pattern=%s query=%s",
+        patron_barcode_matcher.pattern,
+        renewables_query,
+    )
 
     async for loan in client.folio_get_all_async(
         path="/circulation/loans",
@@ -42,7 +49,7 @@ async def stream_loans(
                 not isinstance(patron := loan.get("borrower", {}), dict)
                 or (patron_barcode := patron.get("barcode")) is None
             ):
-                # TODO: Log the source
+                logger.warning("Skipping! No patron barcode for Loan=%s", source)
                 continue
 
             if not patron_barcode_matcher.match(patron_barcode.strip()):
@@ -50,14 +57,15 @@ async def stream_loans(
                 continue
 
         if (
-            len(loan.get("itemId", "").strip()) == 0
+            len(loan_id := loan.get("id", "").strip()) == 0
+            or len(loan.get("itemId", "").strip()) == 0
             or len(loan.get("userId", "").strip()) == 0
         ):
-            # TODO: Log the source
+            logger.warning("Skipping! Missing id/itemId/userId for Loan=%s", source)
             continue
 
         if loan.get("dueDateChangedByRecall", False):
-            # TODO: Log the source
+            logger.info("Skipping renewal because of recall for Loan=%s", loan_id)
             continue
 
         if loan.get(
@@ -67,8 +75,7 @@ async def stream_loans(
             "dueDateChangedByHold",
             False,
         ):
-            # TODO: Log the source with a warning but don't skip
-            ...
+            logger.warning("Ignoring non-recall dueDate change for Loan=%s", source)
 
         yield RenewableLoan(loan["itemId"].strip(), loan["userId"].strip(), source)
 
@@ -79,7 +86,7 @@ async def renew_loans(
 ) -> None:
     """Renews until the source Loans are exhausted."""
     async for loan in renewables:
-        # TODO: Verbosely log Renewing: ids
+        logger.debug("Renewing itemId=%s userId=%s", loan.item_id, loan.patron_id)
 
         try:
             new_loan = await client.folio_post_async(
@@ -89,11 +96,14 @@ async def renew_loans(
                     "userId": loan.patron_id,
                 },
             )
+            logger.info("Renewed itemId=%s userId=%s", loan.item_id, loan.patron_id)
             if new_loan is not None:
-                # TODO: Verbosely log Renewed: _printable_loan(new_loan)
-                ...
-        except FolioError as fe:
-            f"""TODO: Log {fe} and the source as error"""
+                logger.debug(
+                    "Renewal information for Loan=%s",
+                    _printable_loan(new_loan),
+                )
+        except FolioError:
+            logger.exception("Failed to renew Loan=%s", loan.source)
 
 
 RENEWABLES_QUERY_TEMPLATE = (
@@ -176,6 +186,5 @@ def _printable_loan(loan: dict[str, Any]) -> str:
                 ("metadata", "updatedDate"),
             ]
         },
-        indent=4,
         default=str,
     )
