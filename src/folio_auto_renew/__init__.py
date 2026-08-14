@@ -94,20 +94,28 @@ async def stream_loans(
 async def renew_loans(
     client: FolioClient,
     renewables: AsyncIterator[RenewableLoan],
+    dry_run: bool = False,
 ) -> None:
     """Renews until the source Loans are exhausted."""
     async for loan in renewables:
         logger.debug("Renewing itemId=%s userId=%s", loan.item_id, loan.patron_id)
 
         try:
-            new_loan = await client.folio_post_async(
-                "/circulation/renew-by-id",
-                payload={
-                    "itemId": loan.item_id,
-                    "userId": loan.patron_id,
-                },
+            new_loan = None
+            if not dry_run:
+                new_loan = await client.folio_post_async(
+                    "/circulation/renew-by-id",
+                    payload={
+                        "itemId": loan.item_id,
+                        "userId": loan.patron_id,
+                    },
+                )
+            logger.info(
+                "Renewed(dry_run=%s) itemId=%s userId=%s",
+                dry_run,
+                loan.item_id,
+                loan.patron_id,
             )
-            logger.info("Renewed itemId=%s userId=%s", loan.item_id, loan.patron_id)
             if new_loan is not None:
                 logger.debug(
                     "Renewal information for Loan=%s",
