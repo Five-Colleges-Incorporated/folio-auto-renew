@@ -1,6 +1,6 @@
 [project]
 name = "folio-auto-renew"
-version = "0.0.1"
+version = "0.0.2"
 description = "An early preview of the Umbrellaleaf automatic renewals"
 authors = [
     {name = "Katherine Bargar",email = "kbargar@fivecolleges.edu"},
